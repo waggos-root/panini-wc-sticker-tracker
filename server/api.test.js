@@ -1,5 +1,8 @@
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { createApp } from './app.js';
 import { backfillTeamOrder, createDb, stripTeamPrefixFromNames } from './database.js';
 
@@ -65,6 +68,52 @@ describe('catalog seed', () => {
     assert.equal(sample[1].name, 'Player 1');
     assert.equal(sample[12].name, 'Team Photo');
     assert.ok(sample.every((row) => !row.name.startsWith(row.team)));
+  });
+});
+
+describe('backup endpoint', () => {
+  test('POST /api/backup returns 400 for in-memory DB', async () => {
+    const db = createDb(':memory:');
+    const app = createApp(db);
+    const server = await new Promise((resolve) => {
+      const s = app.listen(0, () => resolve({ s, port: s.address().port }));
+    });
+    try {
+      const response = await fetch(`http://127.0.0.1:${server.port}/api/backup`, { method: 'POST' });
+      const body = await response.json();
+      assert.equal(response.status, 400);
+      assert.match(body.error, /memoria/i);
+    } finally {
+      await new Promise((r) => server.s.close(r));
+      db.close();
+    }
+  });
+
+  test('POST /api/backup writes a timestamped .bak alongside the DB file', async () => {
+    const tmpPath = path.join(os.tmpdir(), `panini-test-${Date.now()}.sqlite`);
+    const db = createDb(tmpPath);
+    const app = createApp(db);
+    const server = await new Promise((resolve) => {
+      const s = app.listen(0, () => resolve({ s, port: s.address().port }));
+    });
+    let backupPath;
+    try {
+      const response = await fetch(`http://127.0.0.1:${server.port}/api/backup`, { method: 'POST' });
+      const body = await response.json();
+      assert.equal(response.status, 200);
+      assert.equal(body.ok, true);
+      assert.ok(body.path.startsWith(tmpPath));
+      assert.ok(body.path.endsWith('.bak'));
+      assert.ok(fs.existsSync(body.path));
+      assert.ok(fs.statSync(body.path).size > 0);
+      backupPath = body.path;
+    } finally {
+      await new Promise((r) => server.s.close(r));
+      db.close();
+      for (const file of [tmpPath, `${tmpPath}-shm`, `${tmpPath}-wal`, backupPath]) {
+        if (file && fs.existsSync(file)) fs.unlinkSync(file);
+      }
+    }
   });
 });
 

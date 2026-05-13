@@ -35,6 +35,11 @@ export async function deleteProfile(id) {
   }
 }
 
+export async function backupDatabase() {
+  const response = await fetch(`${API_BASE}/backup`, { method: 'POST' });
+  return jsonOrThrow(response, 'No se pudo respaldar la base de datos');
+}
+
 export async function getStickers(profileId) {
   const response = await fetch(`${API_BASE}/profiles/${profileId}/stickers`);
   return jsonOrThrow(response, 'No se pudo cargar la lista de cromos');

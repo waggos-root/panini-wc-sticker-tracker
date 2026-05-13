@@ -1,13 +1,49 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  backupDatabase,
   createProfile,
   deleteProfile,
   getProfiles,
   getStickers,
   updateStickerQuantity,
 } from './api.js';
+import * as idb from './idb.js';
 
 const ACTIVE_PROFILE_KEY = 'panini.activeProfile';
+const LEGACY_PENDING_KEY = 'panini.pending';
+const SYNC_TAG = 'panini-sync';
+
+async function migrateLegacyPendingFromLocalStorage() {
+  const raw = window.localStorage.getItem(LEGACY_PENDING_KEY);
+  if (!raw) return;
+  try {
+    const legacy = JSON.parse(raw);
+    if (Array.isArray(legacy)) {
+      for (const mutation of legacy) {
+        if (mutation?.profileId != null && mutation?.code) {
+          await idb.putPending({
+            profileId: mutation.profileId,
+            code: mutation.code,
+            quantity: mutation.quantity ?? 0,
+          });
+        }
+      }
+    }
+  } catch (_error) {
+    // legacy payload corrupt; drop it
+  }
+  window.localStorage.removeItem(LEGACY_PENDING_KEY);
+}
+
+async function requestBackgroundSync() {
+  if (!('serviceWorker' in navigator) || !('SyncManager' in window)) return;
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    await registration.sync.register(SYNC_TAG);
+  } catch (_error) {
+    // Background Sync not granted / unavailable — page-side flush still runs.
+  }
+}
 
 const VIEWS = [
   { id: 'album', label: 'Álbum' },
@@ -41,6 +77,14 @@ export default function App() {
   const [search, setSearch] = useState('');
   const [view, setView] = useState(readViewFromUrl);
   const [syncStatus, setSyncStatus] = useState('Cargando...');
+  const [pending, setPending] = useState([]);
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const [syncing, setSyncing] = useState(false);
+
+  async function refreshPendingFromDb() {
+    const rows = await idb.getAllPending();
+    setPending(rows);
+  }
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newProfileName, setNewProfileName] = useState('');
   const [newProfileEmoji, setNewProfileEmoji] = useState('⚽');
@@ -49,13 +93,26 @@ export default function App() {
 
   useEffect(() => {
     async function loadProfiles() {
+      let serverProfiles = [];
+      let loadError = null;
       try {
-        const rows = await getProfiles();
-        setProfiles(rows);
-        const stored = Number.parseInt(window.localStorage.getItem(ACTIVE_PROFILE_KEY) ?? '', 10);
-        const initial = rows.find((profile) => profile.id === stored)?.id ?? rows[0]?.id ?? null;
-        setActiveProfileId(initial);
+        serverProfiles = await getProfiles();
       } catch (error) {
+        loadError = error;
+      }
+      const pendingProfiles = (await idb.getAllPendingProfiles()).map((entry) => ({
+        id: entry.tempId,
+        name: entry.name,
+        emoji: entry.emoji,
+        created_at: new Date(entry.ts).toISOString(),
+        pending: true,
+      }));
+      const combined = [...serverProfiles, ...pendingProfiles];
+      setProfiles(combined);
+      const stored = Number.parseInt(window.localStorage.getItem(ACTIVE_PROFILE_KEY) ?? '', 10);
+      const initial = combined.find((profile) => profile.id === stored)?.id ?? combined[0]?.id ?? null;
+      setActiveProfileId(initial);
+      if (loadError && serverProfiles.length === 0 && pendingProfiles.length === 0) {
         setSyncStatus('Error cargando perfiles');
       }
     }
@@ -83,8 +140,194 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    function onOnline() { setIsOnline(true); }
+    function onOffline() { setIsOnline(false); }
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      await migrateLegacyPendingFromLocalStorage();
+      await refreshPendingFromDb();
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (activeProfileId == null) return;
+    idb.setActiveProfileId(activeProfileId).catch(() => {});
+  }, [activeProfileId]);
+
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    async function onMessage(event) {
+      if (event.data?.type !== 'panini-synced') return;
+      await refreshPendingFromDb();
+      if (event.data.profileId === activeProfileId) {
+        try {
+          const rows = await getStickers(activeProfileId);
+          setStickers(rows);
+          setSyncStatus('Sincronizado en segundo plano');
+        } catch (_error) {
+          // ignore
+        }
+      }
+    }
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  }, [activeProfileId]);
+
+  const pendingForActive = useMemo(
+    () => pending.filter((mutation) => mutation.profileId === activeProfileId),
+    [pending, activeProfileId]
+  );
+
+  const pendingProfileCount = useMemo(
+    () => profiles.filter((profile) => profile.pending).length,
+    [profiles]
+  );
+
+  useEffect(() => {
+    if (!isOnline || syncing || activeProfileId == null) return;
+    if (pendingForActive.length === 0 && pendingProfileCount === 0) return;
+
+    let cancelled = false;
+
+    async function sync() {
+      setSyncing(true);
+      setSyncStatus('Respaldando base de datos...');
+      try {
+        await backupDatabase();
+      } catch (error) {
+        if (!cancelled) {
+          setSyncStatus(`Error al respaldar: ${error.message}`);
+          setSyncing(false);
+        }
+        return;
+      }
+      if (cancelled) { setSyncing(false); return; }
+
+      // Step 1: materialize any pending (temp) profiles. Each that succeeds
+      // gets remapped: queued mutations and (if applicable) the active id
+      // switch from the temp id to the real server-assigned id.
+      let currentActiveId = activeProfileId;
+      const idRemap = new Map();
+      const stillPendingProfiles = [];
+      const localPendingProfiles = await idb.getAllPendingProfiles();
+
+      if (localPendingProfiles.length > 0) {
+        setSyncStatus(`Creando ${localPendingProfiles.length} perfil(es)...`);
+        for (const profile of localPendingProfiles) {
+          if (cancelled) break;
+          try {
+            const created = await createProfile({ name: profile.name, emoji: profile.emoji });
+            idRemap.set(profile.tempId, created.id);
+            await idb.deletePendingProfile(profile.tempId);
+            await idb.remapPendingProfileId(profile.tempId, created.id);
+          } catch (_error) {
+            stillPendingProfiles.push(profile);
+          }
+        }
+      }
+
+      if (idRemap.size > 0) {
+        if (idRemap.has(currentActiveId)) {
+          currentActiveId = idRemap.get(currentActiveId);
+          setActiveProfileId(currentActiveId);
+          await idb.setActiveProfileId(currentActiveId);
+        }
+        let refreshed = [];
+        try {
+          refreshed = await getProfiles();
+        } catch (_error) { /* keep going with whatever we have */ }
+        if (!cancelled) {
+          setProfiles([
+            ...refreshed,
+            ...stillPendingProfiles.map((p) => ({
+              id: p.tempId,
+              name: p.name,
+              emoji: p.emoji,
+              created_at: new Date(p.ts).toISOString(),
+              pending: true,
+            })),
+          ]);
+        }
+        await refreshPendingFromDb();
+      }
+      if (cancelled) { setSyncing(false); return; }
+
+      // Step 2: drain pending mutations for the (possibly remapped) active id.
+      const allPending = await idb.getAllPending();
+      const forActive = allPending.filter((mutation) => mutation.profileId === currentActiveId);
+
+      if (forActive.length === 0) {
+        if (!cancelled) {
+          setSyncStatus(stillPendingProfiles.length ? `${stillPendingProfiles.length} perfil(es) no creados` : 'Sincronizado');
+          setSyncing(false);
+        }
+        return;
+      }
+
+      setSyncStatus(`Sincronizando ${forActive.length} cambios...`);
+      const failed = [];
+      for (const mutation of forActive) {
+        if (cancelled) break;
+        try {
+          await updateStickerQuantity(mutation.profileId, mutation.code, mutation.quantity);
+          await idb.deletePending(mutation.profileId, mutation.code);
+        } catch (_error) {
+          failed.push(mutation);
+        }
+      }
+      if (cancelled) { setSyncing(false); return; }
+
+      setPending((current) => {
+        const others = current.filter((mutation) => mutation.profileId !== currentActiveId);
+        return [...others, ...failed];
+      });
+
+      try {
+        const rows = await getStickers(currentActiveId);
+        if (!cancelled) setStickers(rows);
+      } catch (_error) { /* best-effort */ }
+
+      if (!cancelled) {
+        setSyncStatus(failed.length ? `${failed.length} cambios no sincronizados` : 'Sincronizado');
+        setSyncing(false);
+      }
+    }
+
+    sync();
+    return () => { cancelled = true; };
+  }, [isOnline, activeProfileId, pendingForActive.length, pendingProfileCount]);
+
+  useEffect(() => {
     if (activeProfileId == null) return;
     window.localStorage.setItem(ACTIVE_PROFILE_KEY, String(activeProfileId));
+
+    if (activeProfileId < 0) {
+      // Temp (offline-created) profile — the server has no row yet. Reuse
+      // whatever catalog metadata is already in memory and overlay any pending
+      // mutations for this temp id so quantities show up correctly on reload.
+      setStickers((current) => {
+        if (current.length === 0) return current;
+        const overlay = new Map();
+        for (const mutation of pending) {
+          if (mutation.profileId === activeProfileId) overlay.set(mutation.code, mutation.quantity);
+        }
+        return current.map((sticker) => ({
+          ...sticker,
+          quantity: overlay.has(sticker.code) ? overlay.get(sticker.code) : 0,
+          updated_at: overlay.has(sticker.code) ? new Date().toISOString() : null,
+        }));
+      });
+      setSyncStatus('Perfil pendiente: se creará al reconectar');
+      return;
+    }
 
     async function loadStickers() {
       try {
@@ -98,10 +341,23 @@ export default function App() {
     loadStickers();
   }, [activeProfileId]);
 
+  async function enqueueMutation(profileId, code, quantity) {
+    await idb.putPending({ profileId, code, quantity });
+    setPending((current) => {
+      const filtered = current.filter(
+        (mutation) => !(mutation.profileId === profileId && mutation.code === code)
+      );
+      return [
+        ...filtered,
+        { profileId, code, quantity, ts: Date.now(), key: `${profileId}:${code}` },
+      ];
+    });
+    requestBackgroundSync();
+  }
+
   async function setQuantity(code, quantity) {
     if (activeProfileId == null) return;
     const cleanQuantity = Math.max(0, quantity);
-    const previous = stickers.find((sticker) => sticker.code === code)?.quantity ?? 0;
 
     setStickers((current) =>
       current.map((sticker) =>
@@ -109,17 +365,37 @@ export default function App() {
       )
     );
 
+    if (!isOnline) {
+      await enqueueMutation(activeProfileId, code, cleanQuantity);
+      return;
+    }
+
     try {
       await updateStickerQuantity(activeProfileId, code, cleanQuantity);
       setSyncStatus('Sincronizado con SQLite');
-    } catch (error) {
-      setStickers((current) =>
-        current.map((sticker) =>
-          sticker.code === code ? { ...sticker, quantity: previous } : sticker
-        )
-      );
-      setSyncStatus('Error guardando en SQLite');
+    } catch (_error) {
+      await enqueueMutation(activeProfileId, code, cleanQuantity);
+      setSyncStatus('Cambio guardado localmente. Se sincronizará al reconectar.');
     }
+  }
+
+  function clearCreateForm() {
+    setShowCreateForm(false);
+    setNewProfileName('');
+    setNewProfileEmoji('⚽');
+  }
+
+  async function createTempProfile(name, emoji) {
+    const tempId = -Date.now();
+    await idb.putPendingProfile({ tempId, name, emoji });
+    setProfiles((current) => [
+      ...current,
+      { id: tempId, name, emoji, created_at: new Date().toISOString(), pending: true },
+    ]);
+    setActiveProfileId(tempId);
+    clearCreateForm();
+    setSyncStatus('Perfil creado offline. Se materializará al reconectar.');
+    requestBackgroundSync();
   }
 
   async function handleCreateProfile(event) {
@@ -128,16 +404,26 @@ export default function App() {
     const emoji = newProfileEmoji.trim() || '⚽';
     if (!name) return;
 
+    if (!isOnline) {
+      await createTempProfile(name, emoji);
+      return;
+    }
+
     try {
       const created = await createProfile({ name, emoji });
       setProfiles((current) => [...current, created]);
       setActiveProfileId(created.id);
-      setShowCreateForm(false);
-      setNewProfileName('');
-      setNewProfileEmoji('⚽');
+      clearCreateForm();
       setSyncStatus('Perfil creado');
     } catch (error) {
-      setSyncStatus(error.message);
+      // Distinguish "name already taken" (409) from network failures. Server
+      // errors should be surfaced; network errors should still let the user
+      // proceed offline.
+      if (/existe/i.test(error.message)) {
+        setSyncStatus(error.message);
+        return;
+      }
+      await createTempProfile(name, emoji);
     }
   }
 
@@ -148,11 +434,26 @@ export default function App() {
     );
     if (!confirmed) return;
 
+    // Temp/pending profile lives only locally — drop the IDB entry and any
+    // queued mutations; nothing to call on the server.
+    if (activeProfile.pending) {
+      await idb.deletePendingProfile(activeProfile.id);
+      await idb.clearPendingForProfile(activeProfile.id);
+      const remaining = profiles.filter((profile) => profile.id !== activeProfile.id);
+      setProfiles(remaining);
+      setActiveProfileId(remaining[0]?.id ?? null);
+      setPending((current) => current.filter((mutation) => mutation.profileId !== activeProfile.id));
+      setSyncStatus('Perfil pendiente descartado');
+      return;
+    }
+
     try {
       await deleteProfile(activeProfile.id);
       const remaining = profiles.filter((profile) => profile.id !== activeProfile.id);
       setProfiles(remaining);
       setActiveProfileId(remaining[0]?.id ?? null);
+      await idb.clearPendingForProfile(activeProfile.id);
+      setPending((current) => current.filter((mutation) => mutation.profileId !== activeProfile.id));
       setSyncStatus('Perfil borrado');
     } catch (error) {
       setSyncStatus(error.message);
@@ -287,6 +588,21 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
+        {(!isOnline || pendingForActive.length > 0) && (
+          <div
+            className={`rounded-2xl px-4 py-3 text-sm font-medium shadow ${
+              !isOnline
+                ? 'bg-amber-100 text-amber-900'
+                : 'bg-blue-100 text-blue-900'
+            }`}
+          >
+            {!isOnline
+              ? `Sin conexión. ${pendingForActive.length} cambio${pendingForActive.length === 1 ? '' : 's'} guardado${pendingForActive.length === 1 ? '' : 's'} localmente.`
+              : syncing
+              ? `Sincronizando ${pendingForActive.length} cambio${pendingForActive.length === 1 ? '' : 's'}...`
+              : `${pendingForActive.length} cambio${pendingForActive.length === 1 ? '' : 's'} pendiente${pendingForActive.length === 1 ? '' : 's'} de sincronizar.`}
+          </div>
+        )}
         <div className="rounded-3xl bg-white p-6 shadow-lg">
           <div className="mb-6 flex flex-wrap items-center gap-3 border-b border-slate-200 pb-4">
             <span className="text-sm font-medium text-slate-500">Perfil:</span>
@@ -297,7 +613,7 @@ export default function App() {
             >
               {profiles.map((profile) => (
                 <option key={profile.id} value={profile.id}>
-                  {profile.emoji} {profile.name}
+                  {profile.emoji} {profile.name}{profile.pending ? ' (pendiente)' : ''}
                 </option>
               ))}
             </select>

@@ -1,0 +1,19 @@
+{
+  "name": "Panini Mundial 2026 Tracker",
+  "short_name": "Panini 2026",
+  "description": "Tablero para cromos del álbum Panini Mundial 2026.",
+  "lang": "es",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f1f5f9",
+  "theme_color": "#1e293b",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

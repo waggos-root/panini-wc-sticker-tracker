@@ -14,6 +14,21 @@ export function createApp(db) {
     response.json({ ok: true });
   });
 
+  app.post('/api/backup', async (_request, response) => {
+    if (!db.name || db.name === ':memory:') {
+      response.status(400).json({ error: 'No se puede respaldar una base de datos en memoria' });
+      return;
+    }
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const backupPath = `${db.name}.${timestamp}.bak`;
+    try {
+      await db.backup(backupPath);
+      response.json({ ok: true, path: backupPath, timestamp });
+    } catch (error) {
+      response.status(500).json({ error: error.message });
+    }
+  });
+
   app.get('/api/profiles', (_request, response) => {
     const profiles = db
       .prepare('SELECT id, name, emoji, created_at FROM profiles ORDER BY id')
