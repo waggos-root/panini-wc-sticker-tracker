@@ -62,6 +62,45 @@ export function createApp(db) {
     }
   });
 
+  app.patch('/api/profiles/:id', (request, response) => {
+    const id = Number.parseInt(request.params.id, 10);
+    if (!Number.isInteger(id)) {
+      response.status(400).json({ error: 'ID inválido' });
+      return;
+    }
+
+    const existing = db.prepare('SELECT id, name, emoji FROM profiles WHERE id = ?').get(id);
+    if (!existing) {
+      response.status(404).json({ error: 'Perfil no encontrado' });
+      return;
+    }
+
+    const rawName = request.body.name;
+    const rawEmoji = request.body.emoji;
+    const nextName = rawName === undefined ? existing.name : String(rawName).trim();
+    const nextEmoji = rawEmoji === undefined ? existing.emoji : (String(rawEmoji).trim() || '⚽');
+
+    if (!nextName) {
+      response.status(400).json({ error: 'El nombre es obligatorio' });
+      return;
+    }
+
+    try {
+      db.prepare('UPDATE profiles SET name = ?, emoji = ? WHERE id = ?').run(nextName, nextEmoji, id);
+    } catch (error) {
+      if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+        response.status(409).json({ error: 'Ya existe un perfil con ese nombre' });
+        return;
+      }
+      throw error;
+    }
+
+    const updated = db
+      .prepare('SELECT id, name, emoji, created_at FROM profiles WHERE id = ?')
+      .get(id);
+    response.json(updated);
+  });
+
   app.delete('/api/profiles/:id', (request, response) => {
     const id = Number.parseInt(request.params.id, 10);
     if (!Number.isInteger(id)) {

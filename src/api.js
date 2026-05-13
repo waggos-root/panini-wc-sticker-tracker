@@ -28,6 +28,18 @@ export async function createProfile({ name, emoji }) {
   return jsonOrThrow(response, 'No se pudo crear el perfil');
 }
 
+export async function updateProfile(id, { name, emoji }) {
+  const payload = {};
+  if (name !== undefined) payload.name = name;
+  if (emoji !== undefined) payload.emoji = emoji;
+  const response = await fetch(`${API_BASE}/profiles/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return jsonOrThrow(response, 'No se pudo actualizar el perfil');
+}
+
 export async function deleteProfile(id) {
   const response = await fetch(`${API_BASE}/profiles/${id}`, { method: 'DELETE' });
   if (!response.ok) {

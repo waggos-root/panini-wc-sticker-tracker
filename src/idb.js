@@ -93,6 +93,41 @@ export async function setActiveProfileId(id) {
   return txDone(transaction);
 }
 
+export async function getCachedProfiles() {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const request = db.transaction('meta', 'readonly').objectStore('meta').get('cachedProfiles');
+    request.onsuccess = () => resolve(request.result?.value ?? []);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function setCachedProfiles(profiles) {
+  const db = await openDb();
+  const transaction = db.transaction('meta', 'readwrite');
+  transaction.objectStore('meta').put({ key: 'cachedProfiles', value: profiles });
+  return txDone(transaction);
+}
+
+export async function getCachedStickers(profileId) {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const request = db
+      .transaction('meta', 'readonly')
+      .objectStore('meta')
+      .get(`stickers:${profileId}`);
+    request.onsuccess = () => resolve(request.result?.value ?? null);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function setCachedStickers(profileId, stickers) {
+  const db = await openDb();
+  const transaction = db.transaction('meta', 'readwrite');
+  transaction.objectStore('meta').put({ key: `stickers:${profileId}`, value: stickers });
+  return txDone(transaction);
+}
+
 export async function getAllPendingProfiles() {
   const db = await openDb();
   return new Promise((resolve, reject) => {

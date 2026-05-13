@@ -5,9 +5,11 @@ import {
   deleteProfile,
   getProfiles,
   getStickers,
+  updateProfile,
   updateStickerQuantity,
 } from './api.js';
 import * as idb from './idb.js';
+import { teamGradient } from './teamColors.js';
 
 const ACTIVE_PROFILE_KEY = 'panini.activeProfile';
 const LEGACY_PENDING_KEY = 'panini.pending';
@@ -88,6 +90,9 @@ export default function App() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newProfileName, setNewProfileName] = useState('');
   const [newProfileEmoji, setNewProfileEmoji] = useState('⚽');
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [editProfileName, setEditProfileName] = useState('');
+  const [editProfileEmoji, setEditProfileEmoji] = useState('⚽');
 
   const activeProfile = profiles.find((profile) => profile.id === activeProfileId);
 
@@ -95,10 +100,14 @@ export default function App() {
     async function loadProfiles() {
       let serverProfiles = [];
       let loadError = null;
+      let usedCache = false;
       try {
         serverProfiles = await getProfiles();
+        await idb.setCachedProfiles(serverProfiles);
       } catch (error) {
         loadError = error;
+        serverProfiles = await idb.getCachedProfiles();
+        usedCache = serverProfiles.length > 0;
       }
       const pendingProfiles = (await idb.getAllPendingProfiles()).map((entry) => ({
         id: entry.tempId,
@@ -112,8 +121,10 @@ export default function App() {
       const stored = Number.parseInt(window.localStorage.getItem(ACTIVE_PROFILE_KEY) ?? '', 10);
       const initial = combined.find((profile) => profile.id === stored)?.id ?? combined[0]?.id ?? null;
       setActiveProfileId(initial);
-      if (loadError && serverProfiles.length === 0 && pendingProfiles.length === 0) {
+      if (loadError && combined.length === 0) {
         setSyncStatus('Error cargando perfiles');
+      } else if (loadError && usedCache) {
+        setSyncStatus('Sin conexión: perfiles desde caché');
       }
     }
     loadProfiles();
@@ -309,36 +320,58 @@ export default function App() {
     if (activeProfileId == null) return;
     window.localStorage.setItem(ACTIVE_PROFILE_KEY, String(activeProfileId));
 
-    if (activeProfileId < 0) {
-      // Temp (offline-created) profile — the server has no row yet. Reuse
-      // whatever catalog metadata is already in memory and overlay any pending
-      // mutations for this temp id so quantities show up correctly on reload.
-      setStickers((current) => {
-        if (current.length === 0) return current;
+    let cancelled = false;
+
+    async function load() {
+      if (activeProfileId < 0) {
+        let catalog = stickers;
+        if (catalog.length === 0) {
+          const serverProfile = profiles.find((profile) => !profile.pending);
+          if (serverProfile) {
+            const cached = await idb.getCachedStickers(serverProfile.id);
+            if (cached && cached.length > 0) catalog = cached;
+          }
+        }
+        if (cancelled) return;
+        if (catalog.length === 0) {
+          setSyncStatus('Perfil pendiente: sin catálogo en caché');
+          return;
+        }
         const overlay = new Map();
         for (const mutation of pending) {
           if (mutation.profileId === activeProfileId) overlay.set(mutation.code, mutation.quantity);
         }
-        return current.map((sticker) => ({
-          ...sticker,
-          quantity: overlay.has(sticker.code) ? overlay.get(sticker.code) : 0,
-          updated_at: overlay.has(sticker.code) ? new Date().toISOString() : null,
-        }));
-      });
-      setSyncStatus('Perfil pendiente: se creará al reconectar');
-      return;
-    }
+        setStickers(
+          catalog.map((sticker) => ({
+            ...sticker,
+            quantity: overlay.has(sticker.code) ? overlay.get(sticker.code) : 0,
+            updated_at: overlay.has(sticker.code) ? new Date().toISOString() : null,
+          }))
+        );
+        setSyncStatus('Perfil pendiente: se creará al reconectar');
+        return;
+      }
 
-    async function loadStickers() {
       try {
         const rows = await getStickers(activeProfileId);
+        if (cancelled) return;
         setStickers(rows);
+        await idb.setCachedStickers(activeProfileId, rows);
         setSyncStatus('Sincronizado con SQLite');
-      } catch (error) {
-        setSyncStatus('Error conectando con SQLite/API');
+      } catch (_error) {
+        const cached = await idb.getCachedStickers(activeProfileId);
+        if (cancelled) return;
+        if (cached && cached.length > 0) {
+          setStickers(cached);
+          setSyncStatus('Sin conexión: cromos desde caché');
+        } else {
+          setSyncStatus('Error conectando con SQLite/API');
+        }
       }
     }
-    loadStickers();
+
+    load();
+    return () => { cancelled = true; };
   }, [activeProfileId]);
 
   async function enqueueMutation(profileId, code, quantity) {
@@ -424,6 +457,49 @@ export default function App() {
         return;
       }
       await createTempProfile(name, emoji);
+    }
+  }
+
+  function openEditForm() {
+    if (!activeProfile) return;
+    setEditProfileName(activeProfile.name);
+    setEditProfileEmoji(activeProfile.emoji);
+    setShowEditForm(true);
+    setShowCreateForm(false);
+  }
+
+  async function handleEditProfile(event) {
+    event.preventDefault();
+    if (!activeProfile) return;
+    const name = editProfileName.trim();
+    const emoji = editProfileEmoji.trim() || '⚽';
+    if (!name) return;
+
+    if (activeProfile.pending) {
+      // Temp profile lives only in IDB — overwrite the entry and the state row.
+      await idb.putPendingProfile({ tempId: activeProfile.id, name, emoji });
+      setProfiles((current) =>
+        current.map((profile) => (profile.id === activeProfile.id ? { ...profile, name, emoji } : profile))
+      );
+      setShowEditForm(false);
+      setSyncStatus('Perfil pendiente actualizado');
+      return;
+    }
+
+    if (!isOnline) {
+      setSyncStatus('Renombrar un perfil del servidor solo está disponible con conexión');
+      return;
+    }
+
+    try {
+      const updated = await updateProfile(activeProfile.id, { name, emoji });
+      setProfiles((current) =>
+        current.map((profile) => (profile.id === activeProfile.id ? { ...profile, ...updated } : profile))
+      );
+      setShowEditForm(false);
+      setSyncStatus('Perfil actualizado');
+    } catch (error) {
+      setSyncStatus(error.message);
     }
   }
 
@@ -618,11 +694,19 @@ export default function App() {
               ))}
             </select>
             <button
-              onClick={() => setShowCreateForm((value) => !value)}
+              onClick={() => { setShowCreateForm((value) => !value); setShowEditForm(false); }}
               className="rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-bold hover:bg-blue-100"
               title="Nuevo perfil"
             >
               + Nuevo
+            </button>
+            <button
+              onClick={openEditForm}
+              disabled={!activeProfile}
+              className="rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-bold hover:bg-yellow-100 disabled:cursor-not-allowed disabled:opacity-40"
+              title="Renombrar perfil activo"
+            >
+              ✎ Editar
             </button>
             <button
               onClick={handleDeleteProfile}
@@ -633,6 +717,43 @@ export default function App() {
               × Borrar
             </button>
           </div>
+
+          {showEditForm && activeProfile && (
+            <form
+              onSubmit={handleEditProfile}
+              className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl bg-yellow-50 p-4"
+            >
+              <input
+                type="text"
+                value={editProfileEmoji}
+                onChange={(event) => setEditProfileEmoji(event.target.value)}
+                placeholder="⚽"
+                maxLength={4}
+                className="w-16 rounded-xl border border-slate-300 px-3 py-2 text-center text-lg focus:outline-none focus:ring-2 focus:ring-yellow-500"
+              />
+              <input
+                type="text"
+                value={editProfileName}
+                onChange={(event) => setEditProfileName(event.target.value)}
+                placeholder="Nombre del perfil"
+                autoFocus
+                className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500"
+              />
+              <button
+                type="submit"
+                className="rounded-xl bg-yellow-500 px-4 py-2 text-sm font-bold text-white hover:bg-yellow-600"
+              >
+                Guardar
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowEditForm(false)}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+              >
+                Cancelar
+              </button>
+            </form>
+          )}
 
           {showCreateForm && (
             <form
@@ -765,11 +886,19 @@ export default function App() {
                       (sticker) => sticker.team === team && sticker.quantity > 0
                     ).length;
 
+                    const background = teamGradient(team);
+
                     return (
-                      <div key={team} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <div
+                        key={team}
+                        style={background ? { background } : undefined}
+                        className="rounded-2xl border border-slate-200 p-4"
+                      >
                         <div className="mb-3 flex items-center justify-between">
-                          <h4 className="font-semibold text-slate-800">{team}</h4>
-                          <span className="rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-700">
+                          <h4 className="rounded-full bg-white/70 px-2 py-1 text-sm font-semibold text-slate-800 backdrop-blur-sm">
+                            {team}
+                          </h4>
+                          <span className="rounded-full bg-white/70 px-2 py-1 text-xs font-semibold text-slate-700 backdrop-blur-sm">
                             {ownedTeam}/20
                           </span>
                         </div>

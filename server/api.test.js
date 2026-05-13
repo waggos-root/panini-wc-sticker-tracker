@@ -246,6 +246,45 @@ describe('profile CRUD', () => {
     assert.match(body.error, /existe/i);
   });
 
+  test('PATCH renames a profile', async () => {
+    const { status, body } = await api(server.baseUrl, '/api/profiles/1', {
+      method: 'PATCH',
+      body: JSON.stringify({ name: 'Renamed', emoji: '🎯' }),
+    });
+    assert.equal(status, 200);
+    assert.equal(body.name, 'Renamed');
+    assert.equal(body.emoji, '🎯');
+  });
+
+  test('PATCH rejects empty name with 400', async () => {
+    const { status } = await api(server.baseUrl, '/api/profiles/1', {
+      method: 'PATCH',
+      body: JSON.stringify({ name: '   ' }),
+    });
+    assert.equal(status, 400);
+  });
+
+  test('PATCH rejects duplicate name with 409', async () => {
+    await api(server.baseUrl, '/api/profiles', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Conflict-Target', emoji: '🟦' }),
+    });
+    const { status, body } = await api(server.baseUrl, '/api/profiles/1', {
+      method: 'PATCH',
+      body: JSON.stringify({ name: 'Conflict-Target' }),
+    });
+    assert.equal(status, 409);
+    assert.match(body.error, /existe/i);
+  });
+
+  test('PATCH on unknown profile returns 404', async () => {
+    const { status } = await api(server.baseUrl, '/api/profiles/9999', {
+      method: 'PATCH',
+      body: JSON.stringify({ name: 'Nope' }),
+    });
+    assert.equal(status, 404);
+  });
+
   test('DELETE removes a non-last profile', async () => {
     await api(server.baseUrl, '/api/profiles', {
       method: 'POST',
