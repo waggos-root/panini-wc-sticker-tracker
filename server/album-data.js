@@ -24,15 +24,32 @@ export const worldCupHistory = [
   { code: 'FWC19', name: 'Argentina 2022' },
 ];
 
+// Ordered by 2026 World Cup group draw (Group A → Group L, positions 1–4 within each).
 export const teams = [
-  'Mexico', 'Canada', 'USA', 'Algeria', 'Argentina', 'Australia', 'Austria',
-  'Belgium', 'Bosnia and Herzegovina', 'Brazil', 'Cape Verde', 'Colombia',
-  'Congo DR', 'Croatia', 'Curaçao', 'Czechia', 'Ecuador', 'Egypt', 'England',
-  'France', 'Germany', 'Ghana', 'Haiti', 'Iran', 'Iraq', 'Ivory Coast', 'Japan',
-  'Jordan', 'Morocco', 'Netherlands', 'New Zealand', 'Norway', 'Panama',
-  'Paraguay', 'Portugal', 'Qatar', 'Saudi Arabia', 'Scotland', 'Senegal',
-  'South Africa', 'South Korea', 'Spain', 'Sweden', 'Switzerland', 'Tunisia',
-  'Türkiye', 'Uruguay', 'Uzbekistan',
+  // Group A
+  'Mexico', 'South Africa', 'South Korea', 'Czechia',
+  // Group B
+  'Canada', 'Bosnia and Herzegovina', 'Qatar', 'Switzerland',
+  // Group C
+  'Brazil', 'Morocco', 'Haiti', 'Scotland',
+  // Group D
+  'USA', 'Paraguay', 'Australia', 'Türkiye',
+  // Group E
+  'Germany', 'Curaçao', 'Ivory Coast', 'Ecuador',
+  // Group F
+  'Netherlands', 'Japan', 'Sweden', 'Tunisia',
+  // Group G
+  'Belgium', 'Egypt', 'Iran', 'New Zealand',
+  // Group H
+  'Spain', 'Cape Verde', 'Saudi Arabia', 'Uruguay',
+  // Group I
+  'France', 'Senegal', 'Iraq', 'Norway',
+  // Group J
+  'Argentina', 'Algeria', 'Austria', 'Jordan',
+  // Group K
+  'Portugal', 'Congo DR', 'Uzbekistan', 'Colombia',
+  // Group L
+  'England', 'Croatia', 'Ghana', 'Panama',
 ];
 
 export const teamCodes = {

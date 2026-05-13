@@ -16,6 +16,7 @@ export function buildStickerSeed() {
     team: null,
     type: 'intro',
     source: 'pack',
+    team_order: null,
   }));
 
   const history = worldCupHistory.map((entry) => ({
@@ -25,21 +26,22 @@ export function buildStickerSeed() {
     team: null,
     type: 'museum',
     source: 'pack',
+    team_order: null,
   }));
 
-  const countries = teams.flatMap((team) => {
+  const countries = teams.flatMap((team, teamIndex) => {
     const code = teamCode(team);
 
     return Array.from({ length: 20 }).map((_, index) => {
       const position = index + 1;
       let name;
       if (position === 1) {
-        name = `${team} Team Logo`;
+        name = 'Team Logo';
       } else if (position === 13) {
-        name = `${team} Team Photo`;
+        name = 'Team Photo';
       } else {
         const playerNumber = position < 13 ? position - 1 : position - 2;
-        name = `${team} Player ${playerNumber}`;
+        name = `Player ${playerNumber}`;
       }
 
       return {
@@ -49,6 +51,7 @@ export function buildStickerSeed() {
         team,
         type: 'country',
         source: 'pack',
+        team_order: teamIndex,
       };
     });
   });
