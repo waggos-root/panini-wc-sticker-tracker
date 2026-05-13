@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Runtime SQLite database (created and seeded automatically on first server start)
+data/*.sqlite
+data/*.sqlite-wal
+data/*.sqlite-shm
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Claude Code project notes (local-only)
+CLAUDE.md
