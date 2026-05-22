@@ -74,6 +74,11 @@ function stickerClass(quantity) {
   return 'border-yellow-500 bg-yellow-100 text-yellow-900';
 }
 
+function csvEscape(value) {
+  const str = String(value ?? '');
+  return /[",\n\r]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+}
+
 const SOURCE_BADGES = {
   coca_cola: { label: 'Coca-Cola', className: 'bg-red-600 text-white' },
   other_exclusive: { label: 'Exclusivo', className: 'bg-purple-600 text-white' },
@@ -425,6 +430,33 @@ export default function App() {
       await enqueueMutation(activeProfileId, code, cleanQuantity);
       setSyncStatus('Cambio guardado localmente. Se sincronizará al reconectar.');
     }
+  }
+
+  function exportCsv() {
+    if (viewStickers.length === 0) return;
+    const isRepeated = view === 'repeated';
+    const header = isRepeated
+      ? ['codigo', 'nombre', 'equipo', 'cantidad', 'extras']
+      : ['codigo', 'nombre', 'equipo'];
+    const lines = [header.map(csvEscape).join(',')];
+    for (const sticker of viewStickers) {
+      const row = isRepeated
+        ? [sticker.code, sticker.name, sticker.team || '', sticker.quantity, sticker.quantity - 1]
+        : [sticker.code, sticker.name, sticker.team || ''];
+      lines.push(row.map(csvEscape).join(','));
+    }
+    const csv = `\ufeff${lines.join('\n')}\n`;
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const slug = (activeProfile?.name || 'perfil').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+    const date = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `panini-${isRepeated ? 'repetidos' : 'faltantes'}-${slug}-${date}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   }
 
   function clearCreateForm() {
@@ -1011,18 +1043,29 @@ export default function App() {
                     ? `${viewStickers.length} cromo${viewStickers.length === 1 ? '' : 's'} faltante${viewStickers.length === 1 ? '' : 's'}.`
                     : `${viewStickers.length} cromo${viewStickers.length === 1 ? '' : 's'} repetido${viewStickers.length === 1 ? '' : 's'}.`}
                 </p>
-                <label
-                  className="flex shrink-0 cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100"
-                  title="Oculta los botones y compacta las filas para compartir"
-                >
-                  <input
-                    type="checkbox"
-                    checked={compactList}
-                    onChange={(event) => setCompactList(event.target.checked)}
-                    className="h-4 w-4 cursor-pointer"
-                  />
-                  Compacto
-                </label>
+                <div className="flex shrink-0 items-center gap-2">
+                  <label
+                    className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                    title="Oculta los botones y compacta las filas para compartir"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={compactList}
+                      onChange={(event) => setCompactList(event.target.checked)}
+                      className="h-4 w-4 cursor-pointer"
+                    />
+                    Compacto
+                  </label>
+                  <button
+                    type="button"
+                    onClick={exportCsv}
+                    disabled={viewStickers.length === 0}
+                    className="rounded-xl border border-slate-300 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-40"
+                    title="Descargar la lista visible como CSV"
+                  >
+                    Exportar CSV
+                  </button>
+                </div>
               </div>
               {viewStickers.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
