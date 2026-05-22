@@ -78,6 +78,7 @@ export default function App() {
   const [stickers, setStickers] = useState([]);
   const [search, setSearch] = useState('');
   const [view, setView] = useState(readViewFromUrl);
+  const [teamSort, setTeamSort] = useState('album');
   const [syncStatus, setSyncStatus] = useState('Cargando...');
   const [pending, setPending] = useState([]);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
@@ -558,9 +559,26 @@ export default function App() {
     (sticker) => sticker.type === 'intro' || sticker.type === 'museum'
   );
 
-  const countryTeams = [
-    ...new Set(stickers.filter((sticker) => sticker.team).map((sticker) => sticker.team)),
-  ];
+  const countryTeams = useMemo(
+    () => [...new Set(stickers.filter((sticker) => sticker.team).map((sticker) => sticker.team))],
+    [stickers]
+  );
+
+  const sortedCountryTeams = useMemo(() => {
+    if (teamSort === 'album') return countryTeams;
+    const owned = new Map(countryTeams.map((team) => [team, 0]));
+    for (const sticker of stickers) {
+      if (sticker.team && sticker.quantity > 0) {
+        owned.set(sticker.team, owned.get(sticker.team) + 1);
+      }
+    }
+    const albumIndex = new Map(countryTeams.map((team, index) => [team, index]));
+    const direction = teamSort === 'desc' ? -1 : 1;
+    return [...countryTeams].sort((a, b) => {
+      const diff = (owned.get(a) - owned.get(b)) * direction;
+      return diff !== 0 ? diff : albumIndex.get(a) - albumIndex.get(b);
+    });
+  }, [countryTeams, stickers, teamSort]);
 
   function renderStickerRow(sticker) {
     const badge = SOURCE_BADGES[sticker.source];
@@ -873,12 +891,48 @@ export default function App() {
               </section>
 
               <section>
-                <h3 className="mb-3 text-xl font-bold text-slate-800">
-                  Selecciones nacionales
-                </h3>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                  <h3 className="text-xl font-bold text-slate-800">
+                    Selecciones nacionales
+                  </h3>
+                  <div className="flex gap-1 rounded-xl bg-slate-100 p-1 text-sm">
+                    <button
+                      onClick={() => setTeamSort('album')}
+                      className={`rounded-lg px-3 py-1 font-medium transition ${
+                        teamSort === 'album'
+                          ? 'bg-white text-slate-900 shadow'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Orden del álbum
+                    </button>
+                    <button
+                      onClick={() => setTeamSort('desc')}
+                      className={`rounded-lg px-3 py-1 font-medium transition ${
+                        teamSort === 'desc'
+                          ? 'bg-white text-slate-900 shadow'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                      title="Más cromos obtenidos primero"
+                    >
+                      Más cromos
+                    </button>
+                    <button
+                      onClick={() => setTeamSort('asc')}
+                      className={`rounded-lg px-3 py-1 font-medium transition ${
+                        teamSort === 'asc'
+                          ? 'bg-white text-slate-900 shadow'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                      title="Menos cromos obtenidos primero"
+                    >
+                      Menos cromos
+                    </button>
+                  </div>
+                </div>
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {countryTeams.map((team) => {
+                  {sortedCountryTeams.map((team) => {
                     const teamStickers = viewStickers.filter((sticker) => sticker.team === team);
                     if (teamStickers.length === 0) return null;
 
