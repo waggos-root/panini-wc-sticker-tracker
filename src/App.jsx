@@ -51,7 +51,10 @@ const VIEWS = [
   { id: 'album', label: 'Álbum' },
   { id: 'missing', label: 'Faltantes' },
   { id: 'repeated', label: 'Repetidos' },
+  { id: 'completed', label: 'Completos' },
 ];
+
+const TEAM_STICKER_COUNT = 20;
 
 const VALID_VIEWS = VIEWS.map((option) => option.id);
 const VALID_SORTS = ['album', 'desc', 'asc'];
@@ -610,6 +613,16 @@ export default function App() {
     [stickers]
   );
 
+  const completedTeams = useMemo(() => {
+    const owned = new Map(countryTeams.map((team) => [team, 0]));
+    for (const sticker of stickers) {
+      if (sticker.team && sticker.quantity > 0) {
+        owned.set(sticker.team, owned.get(sticker.team) + 1);
+      }
+    }
+    return countryTeams.filter((team) => owned.get(team) === TEAM_STICKER_COUNT);
+  }, [countryTeams, stickers]);
+
   const sortedCountryTeams = useMemo(() => {
     if (teamSort === 'album') return countryTeams;
     const owned = new Map(countryTeams.map((team) => [team, 0]));
@@ -1019,10 +1032,10 @@ export default function App() {
                       >
                         <div className="mb-3 flex items-center justify-between">
                           <h4 className="rounded-full bg-white/70 px-2 py-1 text-sm font-semibold text-slate-800 backdrop-blur-sm">
-                            {team}
+                            {ownedTeam === TEAM_STICKER_COUNT ? `🏆 ${team}` : team}
                           </h4>
                           <span className="rounded-full bg-white/70 px-2 py-1 text-xs font-semibold text-slate-700 backdrop-blur-sm">
-                            {ownedTeam}/20
+                            {ownedTeam}/{TEAM_STICKER_COUNT}
                           </span>
                         </div>
 
@@ -1034,6 +1047,37 @@ export default function App() {
                   })}
                 </div>
               </section>
+            </div>
+          ) : view === 'completed' ? (
+            <div>
+              <p className="mb-3 text-sm text-slate-600">
+                {completedTeams.length} selecci{completedTeams.length === 1 ? 'ón' : 'ones'} completa{completedTeams.length === 1 ? '' : 's'}.
+              </p>
+              {completedTeams.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
+                  Todavía no has completado ninguna selección. ¡Sigue así!
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {completedTeams.map((team) => {
+                    const background = teamGradient(team);
+                    return (
+                      <div
+                        key={team}
+                        style={background ? { background } : undefined}
+                        className="flex items-center justify-between rounded-2xl border border-slate-200 p-4"
+                      >
+                        <h4 className="rounded-full bg-white/70 px-3 py-1 text-base font-semibold text-slate-800 backdrop-blur-sm">
+                          🏆 {team}
+                        </h4>
+                        <span className="rounded-full bg-white/70 px-2 py-1 text-xs font-semibold text-slate-700 backdrop-blur-sm">
+                          {TEAM_STICKER_COUNT}/{TEAM_STICKER_COUNT}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           ) : (
             <div>
