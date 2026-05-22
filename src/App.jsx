@@ -754,8 +754,10 @@ export default function App() {
           <span className="mt-1 inline-block text-[11px] font-semibold">
             Cantidad: {sticker.quantity}
           </span>
-          {updated && (
+          {updated ? (
             <span className="mt-0.5 block text-[10px] italic opacity-60">{updated}</span>
+          ) : (
+            <span aria-hidden="true" className="mt-0.5 block text-[10px] italic invisible">·</span>
           )}
         </button>
 
