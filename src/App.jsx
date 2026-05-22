@@ -79,6 +79,7 @@ export default function App() {
   const [search, setSearch] = useState('');
   const [view, setView] = useState(readViewFromUrl);
   const [teamSort, setTeamSort] = useState('album');
+  const [compactList, setCompactList] = useState(false);
   const [syncStatus, setSyncStatus] = useState('Cargando...');
   const [pending, setPending] = useState([]);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
@@ -587,15 +588,30 @@ export default function App() {
     return (
       <li
         key={sticker.code}
-        className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2"
+        className={`flex items-center rounded-xl border border-slate-200 bg-white ${
+          compactList ? 'gap-2 px-2 py-1' : 'gap-3 px-3 py-2'
+        }`}
       >
-        <span className="w-20 shrink-0 rounded bg-slate-100 px-2 py-1 text-center font-mono text-xs font-bold text-slate-700">
+        <span
+          className={`shrink-0 rounded bg-slate-100 text-center font-mono font-bold text-slate-700 ${
+            compactList ? 'w-14 px-1.5 py-0.5 text-[11px]' : 'w-20 px-2 py-1 text-xs'
+          }`}
+        >
           {sticker.code}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium text-slate-800">{sticker.name}</div>
-          {sticker.team && (
-            <div className="truncate text-xs text-slate-500">{sticker.team}</div>
+          {compactList ? (
+            <div className="truncate text-xs text-slate-800">
+              <span className="font-medium">{sticker.name}</span>
+              {sticker.team && <span className="text-slate-500"> · {sticker.team}</span>}
+            </div>
+          ) : (
+            <>
+              <div className="truncate text-sm font-medium text-slate-800">{sticker.name}</div>
+              {sticker.team && (
+                <div className="truncate text-xs text-slate-500">{sticker.team}</div>
+              )}
+            </>
           )}
         </div>
         {badge && (
@@ -604,29 +620,37 @@ export default function App() {
           </span>
         )}
         {isRepeated && (
-          <span className="shrink-0 rounded-lg bg-yellow-100 px-2 py-1 text-xs font-bold text-yellow-900">
+          <span
+            className={`shrink-0 rounded-lg bg-yellow-100 font-bold text-yellow-900 ${
+              compactList ? 'px-1.5 py-0.5 text-[11px]' : 'px-2 py-1 text-xs'
+            }`}
+          >
             ×{sticker.quantity}
-            <span className="ml-1 font-normal opacity-70">+{sticker.quantity - 1}</span>
+            {!compactList && (
+              <span className="ml-1 font-normal opacity-70">+{sticker.quantity - 1}</span>
+            )}
           </span>
         )}
-        <div className="flex shrink-0 gap-1">
-          {isRepeated && (
+        {!compactList && (
+          <div className="flex shrink-0 gap-1">
+            {isRepeated && (
+              <button
+                onClick={() => setQuantity(sticker.code, sticker.quantity - 1)}
+                className="rounded-lg border border-slate-300 bg-slate-50 px-2 py-1 text-xs font-bold hover:bg-red-100"
+                title="Quitar uno"
+              >
+                −
+              </button>
+            )}
             <button
-              onClick={() => setQuantity(sticker.code, sticker.quantity - 1)}
-              className="rounded-lg border border-slate-300 bg-slate-50 px-2 py-1 text-xs font-bold hover:bg-red-100"
-              title="Quitar uno"
+              onClick={() => setQuantity(sticker.code, sticker.quantity + 1)}
+              className="rounded-lg border border-slate-300 bg-slate-50 px-2 py-1 text-xs font-bold hover:bg-green-100"
+              title={isRepeated ? 'Sumar uno' : 'Marcar como obtenido'}
             >
-              −
+              +
             </button>
-          )}
-          <button
-            onClick={() => setQuantity(sticker.code, sticker.quantity + 1)}
-            className="rounded-lg border border-slate-300 bg-slate-50 px-2 py-1 text-xs font-bold hover:bg-green-100"
-            title={isRepeated ? 'Sumar uno' : 'Marcar como obtenido'}
-          >
-            +
-          </button>
-        </div>
+          </div>
+        )}
       </li>
     );
   }
@@ -968,11 +992,25 @@ export default function App() {
             </div>
           ) : (
             <div>
-              <p className="mb-3 text-sm text-slate-600">
-                {view === 'missing'
-                  ? `${viewStickers.length} cromo${viewStickers.length === 1 ? '' : 's'} faltante${viewStickers.length === 1 ? '' : 's'}.`
-                  : `${viewStickers.length} cromo${viewStickers.length === 1 ? '' : 's'} repetido${viewStickers.length === 1 ? '' : 's'}.`}
-              </p>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-slate-600">
+                  {view === 'missing'
+                    ? `${viewStickers.length} cromo${viewStickers.length === 1 ? '' : 's'} faltante${viewStickers.length === 1 ? '' : 's'}.`
+                    : `${viewStickers.length} cromo${viewStickers.length === 1 ? '' : 's'} repetido${viewStickers.length === 1 ? '' : 's'}.`}
+                </p>
+                <label
+                  className="flex shrink-0 cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                  title="Oculta los botones y compacta las filas para compartir"
+                >
+                  <input
+                    type="checkbox"
+                    checked={compactList}
+                    onChange={(event) => setCompactList(event.target.checked)}
+                    className="h-4 w-4 cursor-pointer"
+                  />
+                  Compacto
+                </label>
+              </div>
               {viewStickers.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
                   {view === 'missing'
@@ -980,7 +1018,13 @@ export default function App() {
                     : 'No tienes cromos repetidos.'}
                 </div>
               ) : (
-                <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+                <ul
+                  className={`grid grid-cols-1 ${
+                    compactList
+                      ? 'gap-1 md:grid-cols-3 xl:grid-cols-4'
+                      : 'gap-2 md:grid-cols-2 xl:grid-cols-3'
+                  }`}
+                >
                   {viewStickers.map(renderStickerRow)}
                 </ul>
               )}
