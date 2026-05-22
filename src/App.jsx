@@ -83,16 +83,16 @@ function csvEscape(value) {
 }
 
 function spareChipClass(spares) {
-  if (spares <= 1) return 'bg-yellow-100 text-yellow-900';
-  if (spares <= 2) return 'bg-yellow-200 text-yellow-900';
-  if (spares <= 3) return 'bg-amber-200 text-amber-900';
-  if (spares <= 4) return 'bg-amber-300 text-amber-900';
-  if (spares <= 5) return 'bg-orange-200 text-orange-900';
-  if (spares <= 6) return 'bg-orange-300 text-orange-900';
-  if (spares <= 7) return 'bg-orange-400 text-orange-950';
-  if (spares <= 8) return 'bg-red-200 text-red-900';
-  if (spares <= 9) return 'bg-red-300 text-red-900';
-  return 'bg-red-500 text-white';
+  if (spares <= 1) return 'bg-yellow-300 text-yellow-900';
+  if (spares <= 2) return 'bg-amber-400 text-amber-950';
+  if (spares <= 3) return 'bg-orange-300 text-orange-900';
+  if (spares <= 4) return 'bg-orange-400 text-orange-950';
+  if (spares <= 5) return 'bg-orange-500 text-white';
+  if (spares <= 6) return 'bg-orange-600 text-white';
+  if (spares <= 7) return 'bg-red-500 text-white';
+  if (spares <= 8) return 'bg-red-600 text-white';
+  if (spares <= 9) return 'bg-red-700 text-white';
+  return 'bg-red-800 text-white';
 }
 
 const SOURCE_BADGES = {
