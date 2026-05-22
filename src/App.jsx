@@ -907,7 +907,7 @@ export default function App() {
             </span>
           </div>
 
-          <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+          <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
             <div className="rounded-2xl bg-green-100 p-4">
               <p className="text-sm font-medium text-green-700">Cromos obtenidos</p>
               <h2 className="text-3xl font-bold text-green-900">{ownedCount}</h2>
@@ -926,6 +926,14 @@ export default function App() {
             <div className="rounded-2xl bg-blue-100 p-4">
               <p className="text-sm font-medium text-blue-700">Total base</p>
               <h2 className="text-3xl font-bold text-blue-900">{totalStickers}</h2>
+            </div>
+
+            <div className="rounded-2xl bg-purple-100 p-4">
+              <p className="text-sm font-medium text-purple-700">Selecciones completas</p>
+              <h2 className="text-3xl font-bold text-purple-900">
+                {completedTeams.length}
+                <span className="text-base font-medium text-purple-700">/{countryTeams.length || 48}</span>
+              </h2>
             </div>
           </div>
         </div>
