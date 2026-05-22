@@ -928,13 +928,18 @@ export default function App() {
               <h2 className="text-3xl font-bold text-blue-900">{totalStickers}</h2>
             </div>
 
-            <div className="rounded-2xl bg-purple-100 p-4">
+            <button
+              type="button"
+              onClick={() => setView('completed')}
+              className="rounded-2xl bg-purple-100 p-4 text-left transition hover:bg-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              title="Ver selecciones completas"
+            >
               <p className="text-sm font-medium text-purple-700">Selecciones completas</p>
               <h2 className="text-3xl font-bold text-purple-900">
                 {completedTeams.length}
                 <span className="text-base font-medium text-purple-700">/{countryTeams.length || 48}</span>
               </h2>
-            </div>
+            </button>
           </div>
         </div>
 
