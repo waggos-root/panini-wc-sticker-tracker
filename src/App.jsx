@@ -79,6 +79,28 @@ function csvEscape(value) {
   return /[",\n\r]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
 }
 
+const RELATIVE_TIME_ES = new Intl.RelativeTimeFormat('es', { numeric: 'auto' });
+
+function parseUpdatedAt(value) {
+  if (!value) return null;
+  const iso = value.includes('T') ? value : `${value.replace(' ', 'T')}Z`;
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatRelativeUpdated(value) {
+  const date = parseUpdatedAt(value);
+  if (!date) return null;
+  const diffSec = (date.getTime() - Date.now()) / 1000;
+  const abs = Math.abs(diffSec);
+  if (abs < 60) return RELATIVE_TIME_ES.format(Math.round(diffSec), 'second');
+  if (abs < 3600) return RELATIVE_TIME_ES.format(Math.round(diffSec / 60), 'minute');
+  if (abs < 86400) return RELATIVE_TIME_ES.format(Math.round(diffSec / 3600), 'hour');
+  if (abs < 86400 * 30) return RELATIVE_TIME_ES.format(Math.round(diffSec / 86400), 'day');
+  if (abs < 86400 * 365) return RELATIVE_TIME_ES.format(Math.round(diffSec / 86400 / 30), 'month');
+  return RELATIVE_TIME_ES.format(Math.round(diffSec / 86400 / 365), 'year');
+}
+
 const SOURCE_BADGES = {
   coca_cola: { label: 'Coca-Cola', className: 'bg-red-600 text-white' },
   other_exclusive: { label: 'Exclusivo', className: 'bg-purple-600 text-white' },
@@ -629,6 +651,7 @@ export default function App() {
   function renderStickerRow(sticker) {
     const badge = SOURCE_BADGES[sticker.source];
     const isRepeated = view === 'repeated';
+    const updated = !compactList ? formatRelativeUpdated(sticker.updated_at) : null;
 
     return (
       <li
@@ -676,6 +699,14 @@ export default function App() {
             )}
           </span>
         )}
+        {updated && (
+          <span
+            className="shrink-0 text-[10px] italic text-slate-400"
+            title={`Actualizado: ${sticker.updated_at}`}
+          >
+            {updated}
+          </span>
+        )}
         {!compactList && (
           <div className="flex shrink-0 gap-1">
             {isRepeated && (
@@ -702,13 +733,14 @@ export default function App() {
 
   function renderSticker(sticker) {
     const badge = SOURCE_BADGES[sticker.source];
+    const updated = formatRelativeUpdated(sticker.updated_at);
 
     return (
       <div key={sticker.code} className="rounded-xl border border-slate-200 bg-white p-2">
         <button
           onClick={() => setQuantity(sticker.code, sticker.quantity + 1)}
           className={`w-full min-h-16 rounded-lg border p-2 text-left transition ${stickerClass(sticker.quantity)}`}
-          title="Clic: sumar uno. Usa - para corregir."
+          title={sticker.updated_at ? `Actualizado: ${sticker.updated_at}` : 'Clic: sumar uno. Usa - para corregir.'}
         >
           <div className="flex items-start justify-between gap-1">
             <span className="block text-xs font-bold">{sticker.code}</span>
@@ -722,6 +754,9 @@ export default function App() {
           <span className="mt-1 inline-block text-[11px] font-semibold">
             Cantidad: {sticker.quantity}
           </span>
+          {updated && (
+            <span className="mt-0.5 block text-[10px] italic opacity-60">{updated}</span>
+          )}
         </button>
 
         <div className="mt-2 grid grid-cols-3 gap-1">
