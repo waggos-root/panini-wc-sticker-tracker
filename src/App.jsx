@@ -913,15 +913,25 @@ export default function App() {
               <h2 className="text-3xl font-bold text-green-900">{ownedCount}</h2>
             </div>
 
-            <div className="rounded-2xl bg-red-100 p-4">
+            <button
+              type="button"
+              onClick={() => setView('missing')}
+              className="rounded-2xl bg-red-100 p-4 text-left transition hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-red-500"
+              title="Ver cromos faltantes"
+            >
               <p className="text-sm font-medium text-red-700">Faltantes</p>
               <h2 className="text-3xl font-bold text-red-900">{missingCount}</h2>
-            </div>
+            </button>
 
-            <div className="rounded-2xl bg-yellow-100 p-4">
+            <button
+              type="button"
+              onClick={() => setView('repeated')}
+              className="rounded-2xl bg-yellow-100 p-4 text-left transition hover:bg-yellow-200 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+              title="Ver cromos repetidos"
+            >
               <p className="text-sm font-medium text-yellow-700">Repetidos extra</p>
               <h2 className="text-3xl font-bold text-yellow-900">{repeatedCount}</h2>
-            </div>
+            </button>
 
             <div className="rounded-2xl bg-blue-100 p-4">
               <p className="text-sm font-medium text-blue-700">Total base</p>
