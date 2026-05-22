@@ -54,11 +54,18 @@ const VIEWS = [
 ];
 
 const VALID_VIEWS = VIEWS.map((option) => option.id);
+const VALID_SORTS = ['album', 'desc', 'asc'];
 
 function readViewFromUrl() {
   const params = new URLSearchParams(window.location.search);
   const value = params.get('view');
   return VALID_VIEWS.includes(value) ? value : 'album';
+}
+
+function readSortFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const value = params.get('sort');
+  return VALID_SORTS.includes(value) ? value : 'album';
 }
 
 function stickerClass(quantity) {
@@ -78,7 +85,7 @@ export default function App() {
   const [stickers, setStickers] = useState([]);
   const [search, setSearch] = useState('');
   const [view, setView] = useState(readViewFromUrl);
-  const [teamSort, setTeamSort] = useState('album');
+  const [teamSort, setTeamSort] = useState(readSortFromUrl);
   const [compactList, setCompactList] = useState(false);
   const [syncStatus, setSyncStatus] = useState('Cargando...');
   const [pending, setPending] = useState([]);
@@ -139,14 +146,20 @@ export default function App() {
     } else {
       params.set('view', view);
     }
+    if (teamSort === 'album') {
+      params.delete('sort');
+    } else {
+      params.set('sort', teamSort);
+    }
     const query = params.toString();
     const url = query ? `${window.location.pathname}?${query}` : window.location.pathname;
     window.history.replaceState(null, '', url);
-  }, [view]);
+  }, [view, teamSort]);
 
   useEffect(() => {
     function onPopState() {
       setView(readViewFromUrl());
+      setTeamSort(readSortFromUrl());
     }
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
