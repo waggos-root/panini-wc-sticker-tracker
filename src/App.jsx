@@ -82,6 +82,19 @@ function csvEscape(value) {
   return /[",\n\r]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
 }
 
+function spareChipClass(spares) {
+  if (spares <= 1) return 'bg-yellow-100 text-yellow-900';
+  if (spares <= 2) return 'bg-yellow-200 text-yellow-900';
+  if (spares <= 3) return 'bg-amber-200 text-amber-900';
+  if (spares <= 4) return 'bg-amber-300 text-amber-900';
+  if (spares <= 5) return 'bg-orange-200 text-orange-900';
+  if (spares <= 6) return 'bg-orange-300 text-orange-900';
+  if (spares <= 7) return 'bg-orange-400 text-orange-950';
+  if (spares <= 8) return 'bg-red-200 text-red-900';
+  if (spares <= 9) return 'bg-red-300 text-red-900';
+  return 'bg-red-500 text-white';
+}
+
 const SOURCE_BADGES = {
   coca_cola: { label: 'Coca-Cola', className: 'bg-red-600 text-white' },
   other_exclusive: { label: 'Exclusivo', className: 'bg-purple-600 text-white' },
@@ -679,7 +692,7 @@ export default function App() {
         )}
         {isRepeated && (
           <span
-            className={`shrink-0 rounded-lg bg-yellow-100 font-bold text-yellow-900 ${
+            className={`shrink-0 rounded-lg font-bold ${spareChipClass(sticker.quantity - 1)} ${
               compactList ? 'px-1.5 py-0.5 text-[11px]' : 'px-2 py-1 text-xs'
             }`}
             title={`Tienes ${sticker.quantity} (${sticker.quantity - 1} de sobra)`}
