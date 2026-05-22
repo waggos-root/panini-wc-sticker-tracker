@@ -739,7 +739,7 @@ export default function App() {
       <div key={sticker.code} className="rounded-xl border border-slate-200 bg-white p-2">
         <button
           onClick={() => setQuantity(sticker.code, sticker.quantity + 1)}
-          className={`w-full min-h-20 rounded-lg border p-2 text-left transition ${stickerClass(sticker.quantity)}`}
+          className={`w-full min-h-16 rounded-lg border p-2 text-left transition ${stickerClass(sticker.quantity)}`}
           title={sticker.updated_at ? `Actualizado: ${sticker.updated_at}` : 'Clic: sumar uno. Usa - para corregir.'}
         >
           <div className="flex items-start justify-between gap-1">
@@ -754,9 +754,9 @@ export default function App() {
           <span className="mt-1 inline-block text-[11px] font-semibold">
             Cantidad: {sticker.quantity}
           </span>
-          {updated && (
-            <span className="mt-0.5 block text-[10px] italic opacity-60">{updated}</span>
-          )}
+          <span className="mt-0.5 block text-[10px] italic opacity-60">
+            {updated || ' '}
+          </span>
         </button>
 
         <div className="mt-2 grid grid-cols-3 gap-1">
