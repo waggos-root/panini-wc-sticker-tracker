@@ -908,10 +908,15 @@ export default function App() {
           </div>
 
           <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
-            <div className="rounded-2xl bg-green-100 p-4">
+            <button
+              type="button"
+              onClick={() => setView('album')}
+              className="rounded-2xl bg-green-100 p-4 text-left transition hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-green-500"
+              title="Ver el álbum"
+            >
               <p className="text-sm font-medium text-green-700">Cromos obtenidos</p>
               <h2 className="text-3xl font-bold text-green-900">{ownedCount}</h2>
-            </div>
+            </button>
 
             <button
               type="button"
