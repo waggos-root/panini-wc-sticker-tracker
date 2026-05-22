@@ -682,11 +682,9 @@ export default function App() {
             className={`shrink-0 rounded-lg bg-yellow-100 font-bold text-yellow-900 ${
               compactList ? 'px-1.5 py-0.5 text-[11px]' : 'px-2 py-1 text-xs'
             }`}
+            title={`Tienes ${sticker.quantity} (${sticker.quantity - 1} de sobra)`}
           >
-            ×{sticker.quantity}
-            {!compactList && (
-              <span className="ml-1 font-normal opacity-70">+{sticker.quantity - 1}</span>
-            )}
+            +{sticker.quantity - 1}
           </span>
         )}
         {!compactList && (
