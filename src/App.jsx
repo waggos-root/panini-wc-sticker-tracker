@@ -639,7 +639,7 @@ export default function App() {
     return countryTeams.filter((team) => owned.get(team) === TEAM_STICKER_COUNT);
   }, [countryTeams, stickers]);
 
-  const reportText = useMemo(() => {
+  const report = useMemo(() => {
     function buildSection(rows, copiesPerRow) {
       const fwc = [];
       const byTeam = new Map();
@@ -668,18 +668,19 @@ export default function App() {
     const missing = stickers.filter((sticker) => sticker.quantity === 0);
     const repeated = stickers.filter((sticker) => sticker.quantity >= 2);
     const spareTotal = repeated.reduce((sum, sticker) => sum + (sticker.quantity - 1), 0);
-    return [
-      `FALTANTES (${missing.length})`,
+    const text = [
+      'FALTANTES',
       buildSection(missing, () => 1),
       '',
-      `REPETIDOS (${spareTotal})`,
+      'REPETIDOS',
       buildSection(repeated, (sticker) => sticker.quantity - 1),
     ].join('\n');
+    return { text, missingCount: missing.length, spareTotal };
   }, [stickers]);
 
   async function copyReport() {
     try {
-      await navigator.clipboard.writeText(reportText);
+      await navigator.clipboard.writeText(report.text);
       setReportCopied(true);
       setTimeout(() => setReportCopied(false), 2000);
     } catch (_error) {
@@ -1144,16 +1145,24 @@ export default function App() {
                 <p className="text-sm text-slate-600">
                   Lista compacta de faltantes y repetidos, agrupada por selección.
                 </p>
-                <button
-                  type="button"
-                  onClick={copyReport}
-                  className="rounded-xl border border-slate-300 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-700 hover:bg-blue-100"
-                >
-                  {reportCopied ? '¡Copiado!' : 'Copiar'}
-                </button>
+                <div className="flex items-center gap-2 select-none" aria-hidden="true">
+                  <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-900">
+                    Faltantes: {report.missingCount}
+                  </span>
+                  <span className="rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-900">
+                    Repetidos: {report.spareTotal}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={copyReport}
+                    className="rounded-xl border border-slate-300 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-700 hover:bg-blue-100"
+                  >
+                    {reportCopied ? '¡Copiado!' : 'Copiar'}
+                  </button>
+                </div>
               </div>
               <pre className="overflow-x-auto whitespace-pre rounded-2xl border border-slate-200 bg-slate-50 p-4 font-mono text-sm text-slate-800">
-                {reportText}
+                {report.text}
               </pre>
             </div>
           ) : view === 'completed' ? (
