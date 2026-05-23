@@ -1121,7 +1121,9 @@ export default function App() {
                       >
                         <div className="mb-3 flex items-center justify-between">
                           <h4 className="rounded-full bg-white/70 px-2 py-1 text-sm font-semibold text-slate-800 backdrop-blur-sm">
-                            {ownedTeam === TEAM_STICKER_COUNT ? `🏆 ${team}` : team}
+                            {ownedTeam === TEAM_STICKER_COUNT ? '🏆 ' : ''}
+                            {TEAM_INFO[team]?.flag && `${TEAM_INFO[team].flag} `}
+                            {team}
                           </h4>
                           <span className="rounded-full bg-white/70 px-2 py-1 text-xs font-semibold text-slate-700 backdrop-blur-sm">
                             {ownedTeam}/{TEAM_STICKER_COUNT}
@@ -1175,7 +1177,7 @@ export default function App() {
                         className="flex items-center justify-between rounded-2xl border border-slate-200 p-4"
                       >
                         <h4 className="rounded-full bg-white/70 px-3 py-1 text-base font-semibold text-slate-800 backdrop-blur-sm">
-                          🏆 {team}
+                          🏆 {TEAM_INFO[team]?.flag && `${TEAM_INFO[team].flag} `}{team}
                         </h4>
                         <span className="rounded-full bg-white/70 px-2 py-1 text-xs font-semibold text-slate-700 backdrop-blur-sm">
                           {TEAM_STICKER_COUNT}/{TEAM_STICKER_COUNT}
