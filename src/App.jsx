@@ -102,6 +102,51 @@ const SOURCE_BADGES = {
   other_exclusive: { label: 'Exclusivo', className: 'bg-purple-600 text-white' },
 };
 
+function stickerNumber(code) {
+  return String(parseInt(code.match(/\d+/)[0], 10));
+}
+
+function groupForReport(stickers) {
+  const fwc = [];
+  const byTeam = new Map();
+  for (const sticker of stickers) {
+    const num = stickerNumber(sticker.code);
+    if (sticker.type === 'country' && sticker.team) {
+      if (!byTeam.has(sticker.team)) byTeam.set(sticker.team, []);
+      byTeam.get(sticker.team).push(num);
+    } else {
+      fwc.push(num);
+    }
+  }
+  return { fwc, byTeam };
+}
+
+function formatReportSection(stickers) {
+  const { fwc, byTeam } = groupForReport(stickers);
+  const lines = [];
+  if (fwc.length > 0) lines.push(`FWC 📜: ${fwc.join(', ')}`);
+  for (const [team, nums] of byTeam) {
+    const info = TEAM_INFO[team];
+    const label = info ? `${info.code} ${info.flag}` : team;
+    lines.push(`${label}: ${nums.join(', ')}`);
+  }
+  return lines.length > 0 ? lines.join('\n') : '(ninguno)';
+}
+
+function buildReport(stickers) {
+  const missing = stickers.filter((sticker) => sticker.quantity === 0);
+  const spares = stickers
+    .filter((sticker) => sticker.quantity >= 2)
+    .flatMap((sticker) => Array(sticker.quantity - 1).fill(sticker));
+  return [
+    'FALTANTES',
+    formatReportSection(missing),
+    '',
+    'REPETIDOS',
+    formatReportSection(spares),
+  ].join('\n');
+}
+
 export default function App() {
   const [profiles, setProfiles] = useState([]);
   const [activeProfileId, setActiveProfileId] = useState(null);
@@ -639,42 +684,7 @@ export default function App() {
     return countryTeams.filter((team) => owned.get(team) === TEAM_STICKER_COUNT);
   }, [countryTeams, stickers]);
 
-  const reportText = useMemo(() => {
-    function buildSection(rows, copiesPerRow) {
-      const fwc = [];
-      const byTeam = new Map();
-      for (const sticker of rows) {
-        const match = sticker.code.match(/\d+/);
-        const num = match ? String(parseInt(match[0], 10)) : sticker.code;
-        let bucket;
-        if (sticker.type === 'country' && sticker.team) {
-          if (!byTeam.has(sticker.team)) byTeam.set(sticker.team, []);
-          bucket = byTeam.get(sticker.team);
-        } else {
-          bucket = fwc;
-        }
-        for (let i = 0; i < copiesPerRow(sticker); i += 1) bucket.push(num);
-      }
-      const lines = [];
-      if (fwc.length > 0) lines.push(`FWC 📜: ${fwc.join(', ')}`);
-      for (const [team, nums] of byTeam) {
-        const info = TEAM_INFO[team];
-        const label = info ? `${info.code} ${info.flag}` : team;
-        lines.push(`${label}: ${nums.join(', ')}`);
-      }
-      return lines.length > 0 ? lines.join('\n') : '(ninguno)';
-    }
-
-    const missing = stickers.filter((sticker) => sticker.quantity === 0);
-    const repeated = stickers.filter((sticker) => sticker.quantity >= 2);
-    return [
-      'FALTANTES',
-      buildSection(missing, () => 1),
-      '',
-      'REPETIDOS',
-      buildSection(repeated, (sticker) => sticker.quantity - 1),
-    ].join('\n');
-  }, [stickers]);
+  const reportText = useMemo(() => buildReport(stickers), [stickers]);
 
   async function copyReport() {
     try {
