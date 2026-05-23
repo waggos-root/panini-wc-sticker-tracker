@@ -10,6 +10,7 @@ import {
 } from './api.js';
 import * as idb from './idb.js';
 import { teamGradient } from './teamColors.js';
+import { TEAM_INFO } from './teamFlags.js';
 
 const ACTIVE_PROFILE_KEY = 'panini.activeProfile';
 const LEGACY_PENDING_KEY = 'panini.pending';
@@ -52,6 +53,7 @@ const VIEWS = [
   { id: 'missing', label: 'Faltantes' },
   { id: 'repeated', label: 'Repetidos' },
   { id: 'completed', label: 'Completos' },
+  { id: 'report', label: 'Reporte' },
 ];
 
 const TEAM_STICKER_COUNT = 20;
@@ -123,6 +125,7 @@ export default function App() {
   const [showEditForm, setShowEditForm] = useState(false);
   const [editProfileName, setEditProfileName] = useState('');
   const [editProfileEmoji, setEditProfileEmoji] = useState('⚽');
+  const [reportCopied, setReportCopied] = useState(false);
 
   const activeProfile = profiles.find((profile) => profile.id === activeProfileId);
 
@@ -636,6 +639,51 @@ export default function App() {
     return countryTeams.filter((team) => owned.get(team) === TEAM_STICKER_COUNT);
   }, [countryTeams, stickers]);
 
+  const reportText = useMemo(() => {
+    function buildSection(rows) {
+      const fwc = [];
+      const byTeam = new Map();
+      for (const sticker of rows) {
+        const match = sticker.code.match(/\d+/);
+        const num = match ? String(parseInt(match[0], 10)) : sticker.code;
+        if (sticker.type === 'country' && sticker.team) {
+          if (!byTeam.has(sticker.team)) byTeam.set(sticker.team, []);
+          byTeam.get(sticker.team).push(num);
+        } else {
+          fwc.push(num);
+        }
+      }
+      const lines = [];
+      if (fwc.length > 0) lines.push(`FWC 📜: ${fwc.join(', ')}`);
+      for (const [team, nums] of byTeam) {
+        const info = TEAM_INFO[team];
+        const label = info ? `${info.code} ${info.flag}` : team;
+        lines.push(`${label}: ${nums.join(', ')}`);
+      }
+      return lines.length > 0 ? lines.join('\n') : '(ninguno)';
+    }
+
+    const missing = stickers.filter((sticker) => sticker.quantity === 0);
+    const repeated = stickers.filter((sticker) => sticker.quantity >= 2);
+    return [
+      `FALTANTES (${missing.length})`,
+      buildSection(missing),
+      '',
+      `REPETIDOS (${repeated.length})`,
+      buildSection(repeated),
+    ].join('\n');
+  }, [stickers]);
+
+  async function copyReport() {
+    try {
+      await navigator.clipboard.writeText(reportText);
+      setReportCopied(true);
+      setTimeout(() => setReportCopied(false), 2000);
+    } catch (_error) {
+      setReportCopied(false);
+    }
+  }
+
   const sortedCountryTeams = useMemo(() => {
     if (teamSort === 'album') return countryTeams;
     const owned = new Map(countryTeams.map((team) => [team, 0]));
@@ -1086,6 +1134,24 @@ export default function App() {
                   })}
                 </div>
               </section>
+            </div>
+          ) : view === 'report' ? (
+            <div>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-slate-600">
+                  Lista compacta de faltantes y repetidos, agrupada por selección.
+                </p>
+                <button
+                  type="button"
+                  onClick={copyReport}
+                  className="rounded-xl border border-slate-300 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-700 hover:bg-blue-100"
+                >
+                  {reportCopied ? '¡Copiado!' : 'Copiar'}
+                </button>
+              </div>
+              <pre className="overflow-x-auto whitespace-pre rounded-2xl border border-slate-200 bg-slate-50 p-4 font-mono text-sm text-slate-800">
+                {reportText}
+              </pre>
             </div>
           ) : view === 'completed' ? (
             <div>
