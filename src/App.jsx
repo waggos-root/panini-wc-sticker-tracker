@@ -640,18 +640,20 @@ export default function App() {
   }, [countryTeams, stickers]);
 
   const reportText = useMemo(() => {
-    function buildSection(rows) {
+    function buildSection(rows, copiesPerRow) {
       const fwc = [];
       const byTeam = new Map();
       for (const sticker of rows) {
         const match = sticker.code.match(/\d+/);
         const num = match ? String(parseInt(match[0], 10)) : sticker.code;
+        let bucket;
         if (sticker.type === 'country' && sticker.team) {
           if (!byTeam.has(sticker.team)) byTeam.set(sticker.team, []);
-          byTeam.get(sticker.team).push(num);
+          bucket = byTeam.get(sticker.team);
         } else {
-          fwc.push(num);
+          bucket = fwc;
         }
+        for (let i = 0; i < copiesPerRow(sticker); i += 1) bucket.push(num);
       }
       const lines = [];
       if (fwc.length > 0) lines.push(`FWC 📜: ${fwc.join(', ')}`);
@@ -665,12 +667,13 @@ export default function App() {
 
     const missing = stickers.filter((sticker) => sticker.quantity === 0);
     const repeated = stickers.filter((sticker) => sticker.quantity >= 2);
+    const spareTotal = repeated.reduce((sum, sticker) => sum + (sticker.quantity - 1), 0);
     return [
       `FALTANTES (${missing.length})`,
-      buildSection(missing),
+      buildSection(missing, () => 1),
       '',
-      `REPETIDOS (${repeated.length})`,
-      buildSection(repeated),
+      `REPETIDOS (${spareTotal})`,
+      buildSection(repeated, (sticker) => sticker.quantity - 1),
     ].join('\n');
   }, [stickers]);
 
