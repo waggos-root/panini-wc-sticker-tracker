@@ -1020,10 +1020,10 @@ export default function App() {
         </div>
 
         <div className="rounded-3xl bg-white p-6 shadow-lg">
-          <div className="mb-6 flex flex-col items-center justify-between gap-4 md:flex-row">
-            <div className="flex items-center gap-3">
+          <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center">
               <h2 className="text-2xl font-bold text-slate-800">Control de cromos</h2>
-              <div className="flex gap-1 rounded-xl bg-slate-100 p-1">
+              <div className="flex flex-wrap gap-1 rounded-xl bg-slate-100 p-1">
                 {VIEWS.map((option) => (
                   <button
                     key={option.id}
