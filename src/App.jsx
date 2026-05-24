@@ -171,6 +171,16 @@ export default function App() {
   const [editProfileName, setEditProfileName] = useState('');
   const [editProfileEmoji, setEditProfileEmoji] = useState('⚽');
   const [reportCopied, setReportCopied] = useState(false);
+  const [expandedTeams, setExpandedTeams] = useState(() => new Set());
+
+  function toggleTeam(team) {
+    setExpandedTeams((current) => {
+      const next = new Set(current);
+      if (next.has(team)) next.delete(team);
+      else next.add(team);
+      return next;
+    });
+  }
 
   const activeProfile = profiles.find((profile) => profile.id === activeProfileId);
 
@@ -1147,6 +1157,8 @@ export default function App() {
                     ).length;
 
                     const background = teamGradient(team);
+                    const searchActive = search.trim() !== '';
+                    const isExpanded = expandedTeams.has(team) || searchActive;
 
                     return (
                       <div
@@ -1154,18 +1166,30 @@ export default function App() {
                         style={background ? { background } : undefined}
                         className="rounded-2xl border border-slate-200 p-4"
                       >
-                        <div className="mb-3 flex items-center justify-between">
-                          <h4 className="rounded-full bg-white/70 px-2 py-1 text-sm font-semibold text-slate-800 backdrop-blur-sm">
-                            {ownedTeam === TEAM_STICKER_COUNT ? '🏆 ' : ''}
-                            {TEAM_INFO[team]?.flag && `${TEAM_INFO[team].flag} `}
-                            {team}
-                          </h4>
-                          <span className="rounded-full bg-white/70 px-2 py-1 text-xs font-semibold text-slate-700 backdrop-blur-sm">
-                            {ownedTeam}/{TEAM_STICKER_COUNT}
+                        <button
+                          type="button"
+                          onClick={() => toggleTeam(team)}
+                          aria-expanded={isExpanded}
+                          className="mb-3 flex w-full items-center justify-between text-left md:cursor-default"
+                        >
+                          <span className="flex items-center gap-2">
+                            <span className="rounded-full bg-white/70 px-2 py-1 text-sm font-semibold text-slate-800 backdrop-blur-sm">
+                              {ownedTeam === TEAM_STICKER_COUNT ? '🏆 ' : ''}
+                              {TEAM_INFO[team]?.flag && `${TEAM_INFO[team].flag} `}
+                              {team}
+                            </span>
                           </span>
-                        </div>
+                          <span className="flex items-center gap-2">
+                            <span className="rounded-full bg-white/70 px-2 py-1 text-xs font-semibold text-slate-700 backdrop-blur-sm">
+                              {ownedTeam}/{TEAM_STICKER_COUNT}
+                            </span>
+                            <span aria-hidden="true" className="text-sm text-slate-700 md:hidden">
+                              {isExpanded ? '▾' : '▸'}
+                            </span>
+                          </span>
+                        </button>
 
-                        <div className="grid grid-cols-4 gap-2">
+                        <div className={`${isExpanded ? 'grid' : 'hidden'} md:grid grid-cols-4 gap-2`}>
                           {teamStickers.map(renderSticker)}
                         </div>
                       </div>
