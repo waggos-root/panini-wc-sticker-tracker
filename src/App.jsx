@@ -13,6 +13,7 @@ import { teamGradient } from './teamColors.js';
 import { TEAM_INFO } from './teamFlags.js';
 
 const ACTIVE_PROFILE_KEY = 'panini.activeProfile';
+const READ_ONLY_KEY = 'panini.readOnly';
 const LEGACY_PENDING_KEY = 'panini.pending';
 const SYNC_TAG = 'panini-sync';
 
@@ -171,7 +172,15 @@ export default function App() {
   const [editProfileName, setEditProfileName] = useState('');
   const [editProfileEmoji, setEditProfileEmoji] = useState('⚽');
   const [reportCopied, setReportCopied] = useState(false);
+  const [readOnly, setReadOnly] = useState(() => {
+    const stored = window.localStorage.getItem(READ_ONLY_KEY);
+    return stored == null ? true : stored === '1';
+  });
   const [expandedTeams, setExpandedTeams] = useState(() => new Set());
+
+  useEffect(() => {
+    window.localStorage.setItem(READ_ONLY_KEY, readOnly ? '1' : '0');
+  }, [readOnly]);
 
   function toggleTeam(team) {
     setExpandedTeams((current) => {
@@ -509,6 +518,7 @@ export default function App() {
 
   async function setQuantity(code, quantity) {
     if (activeProfileId == null) return;
+    if (readOnly) return;
     const cleanQuantity = Math.max(0, quantity);
 
     setStickers((current) =>
@@ -795,7 +805,7 @@ export default function App() {
             +{sticker.quantity - 1}
           </span>
         )}
-        {!compactList && (
+        {!compactList && !readOnly && (
           <div className="flex shrink-0 gap-1">
             {isRepeated && (
               <button
@@ -825,9 +835,13 @@ export default function App() {
     return (
       <div key={sticker.code} className="rounded-xl border border-slate-200 bg-white p-2">
         <button
+          type="button"
           onClick={() => setQuantity(sticker.code, sticker.quantity + 1)}
-          className={`w-full min-h-16 rounded-lg border p-2 text-left transition ${stickerClass(sticker.quantity)}`}
-          title="Clic: sumar uno. Usa - para corregir."
+          disabled={readOnly}
+          className={`w-full min-h-16 rounded-lg border p-2 text-left transition ${stickerClass(sticker.quantity)} ${
+            readOnly ? 'cursor-default' : ''
+          }`}
+          title={readOnly ? 'Modo solo lectura' : 'Clic: sumar uno. Usa - para corregir.'}
         >
           <div className="flex items-start justify-between gap-1">
             <span className="block text-xs font-bold">{sticker.code}</span>
@@ -843,26 +857,28 @@ export default function App() {
           </span>
         </button>
 
-        <div className="mt-2 grid grid-cols-3 gap-1">
-          <button
-            onClick={() => setQuantity(sticker.code, sticker.quantity - 1)}
-            className="rounded-lg border border-slate-300 bg-slate-50 px-2 py-1 text-xs font-bold hover:bg-red-100"
-          >
-            -
-          </button>
-          <button
-            onClick={() => setQuantity(sticker.code, 0)}
-            className="rounded-lg border border-slate-300 bg-slate-50 px-2 py-1 text-xs hover:bg-slate-200"
-          >
-            0
-          </button>
-          <button
-            onClick={() => setQuantity(sticker.code, 1)}
-            className="rounded-lg border border-slate-300 bg-slate-50 px-2 py-1 text-xs hover:bg-green-100"
-          >
-            1
-          </button>
-        </div>
+        {!readOnly && (
+          <div className="mt-2 grid grid-cols-3 gap-1">
+            <button
+              onClick={() => setQuantity(sticker.code, sticker.quantity - 1)}
+              className="rounded-lg border border-slate-300 bg-slate-50 px-2 py-1 text-xs font-bold hover:bg-red-100"
+            >
+              -
+            </button>
+            <button
+              onClick={() => setQuantity(sticker.code, 0)}
+              className="rounded-lg border border-slate-300 bg-slate-50 px-2 py-1 text-xs hover:bg-slate-200"
+            >
+              0
+            </button>
+            <button
+              onClick={() => setQuantity(sticker.code, 1)}
+              className="rounded-lg border border-slate-300 bg-slate-50 px-2 py-1 text-xs hover:bg-green-100"
+            >
+              1
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -921,6 +937,19 @@ export default function App() {
               title="Borrar perfil activo"
             >
               × Borrar
+            </button>
+            <button
+              type="button"
+              onClick={() => setReadOnly((value) => !value)}
+              aria-pressed={readOnly}
+              className={`ml-auto rounded-xl border px-3 py-2 text-sm font-bold ${
+                readOnly
+                  ? 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  : 'border-green-400 bg-green-100 text-green-900 hover:bg-green-200'
+              }`}
+              title={readOnly ? 'Activar edición' : 'Activar solo lectura'}
+            >
+              {readOnly ? '🔒 Solo lectura' : '✏️ Edición'}
             </button>
           </div>
 
