@@ -446,8 +446,25 @@ export default function App() {
         const cached = await idb.getCachedStickers(activeProfileId);
         if (cancelled) return;
         if (cached && cached.length > 0) {
-          setStickers(cached);
-          setSyncStatus('Sin conexión: cromos desde caché');
+          const queued = await idb.getAllPending();
+          if (cancelled) return;
+          const overlay = new Map();
+          for (const mutation of queued) {
+            if (mutation.profileId === activeProfileId) overlay.set(mutation.code, mutation.quantity);
+          }
+          const merged = overlay.size
+            ? cached.map((sticker) =>
+                overlay.has(sticker.code)
+                  ? { ...sticker, quantity: overlay.get(sticker.code), updated_at: new Date().toISOString() }
+                  : sticker
+              )
+            : cached;
+          setStickers(merged);
+          setSyncStatus(
+            overlay.size
+              ? `Sin conexión: ${overlay.size} cambio(s) pendiente(s) aplicados sobre caché`
+              : 'Sin conexión: cromos desde caché'
+          );
         } else {
           setSyncStatus('Error conectando con SQLite/API');
         }
@@ -457,6 +474,14 @@ export default function App() {
     load();
     return () => { cancelled = true; };
   }, [activeProfileId]);
+
+  // Persist the current sticker state for the active server profile so offline
+  // reloads can rebuild the UI from the latest view, not the last server snapshot.
+  useEffect(() => {
+    if (activeProfileId == null || activeProfileId < 0) return;
+    if (stickers.length === 0) return;
+    idb.setCachedStickers(activeProfileId, stickers).catch(() => {});
+  }, [activeProfileId, stickers]);
 
   async function enqueueMutation(profileId, code, quantity) {
     await idb.putPending({ profileId, code, quantity });
