@@ -30,6 +30,7 @@ Thumbs.db
 
 # Claude Code project notes (local-only)
 CLAUDE.md
+.claude/
 
 # Verifier scratch output
 scripts/verify/tmp/
