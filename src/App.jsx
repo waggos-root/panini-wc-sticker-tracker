@@ -458,9 +458,30 @@ export default function App() {
       try {
         const rows = await getStickers(activeProfileId);
         if (cancelled) return;
-        setStickers(rows);
-        await idb.setCachedStickers(activeProfileId, rows);
-        setSyncStatus('Sincronizado con SQLite');
+        // Pending queue is the source of truth for any change the server hasn't
+        // confirmed yet — apply the overlay before we touch state or cache, or
+        // we briefly show stale server data and risk clobbering it via a click
+        // before the sync drain runs.
+        const queued = await idb.getAllPending();
+        if (cancelled) return;
+        const overlay = new Map();
+        for (const mutation of queued) {
+          if (mutation.profileId === activeProfileId) overlay.set(mutation.code, mutation.quantity);
+        }
+        const merged = overlay.size
+          ? rows.map((sticker) =>
+              overlay.has(sticker.code)
+                ? { ...sticker, quantity: overlay.get(sticker.code), updated_at: new Date().toISOString() }
+                : sticker
+            )
+          : rows;
+        setStickers(merged);
+        await idb.setCachedStickers(activeProfileId, merged);
+        setSyncStatus(
+          overlay.size
+            ? `${overlay.size} cambio(s) pendiente(s) por sincronizar`
+            : 'Sincronizado con SQLite'
+        );
       } catch (_error) {
         const cached = await idb.getCachedStickers(activeProfileId);
         if (cancelled) return;
