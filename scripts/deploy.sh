@@ -11,6 +11,8 @@
 #   APP_USER      unprivileged user         (default: panini)
 #   PORT          port the Node server uses (default: 3001)
 #   SERVICE_NAME  OpenRC service name       (default: panini)
+#   SKIP_VERIFY   1 to skip the post-build  (default: unset — verifier runs and
+#                 browser verifier            blocks restart on failure)
 
 set -eu
 
@@ -33,6 +35,14 @@ fi
 echo "==> installing system packages"
 # python3/make/g++ are needed because better-sqlite3 compiles from source on musl.
 apk add --no-cache nodejs npm python3 make g++
+
+if [ -z "${SKIP_VERIFY:-}" ]; then
+    echo "==> installing browser packages for the verifier"
+    # NOTE: full /usr/bin/chromium on Alpine 3.23 has a broken
+    # chrome_crashpad_handler invocation (SIGTRAPs on every launch).
+    # chromium-headless-shell is the same Chromium minus the GUI + that bug.
+    apk add --no-cache chromium-headless-shell nss freetype harfbuzz font-freefont
+fi
 
 echo "==> ensuring $APP_USER system group and user exist"
 # Remove stale user first so HOME stays consistent with APP_DIR. busybox deluser
@@ -62,7 +72,41 @@ echo "==> installing npm dependencies"
 su -s /bin/sh -c "cd '$APP_DIR' && npm install --no-audit --no-fund" "$APP_USER"
 
 echo "==> building frontend"
+# Snapshot the prior dist/ so we can roll back the served frontend if the
+# verifier fails — express.static reads it per-request, so a bad build is
+# live the moment vite rewrites it, even before we restart the service.
+if [ -z "${SKIP_VERIFY:-}" ] && [ -d "$APP_DIR/dist" ]; then
+    rm -rf "$APP_DIR/dist.prev"
+    cp -a "$APP_DIR/dist" "$APP_DIR/dist.prev"
+fi
 su -s /bin/sh -c "cd '$APP_DIR' && npm run build" "$APP_USER"
+
+if [ -z "${SKIP_VERIFY:-}" ]; then
+    echo "==> installing verifier deps"
+    # playwright-core is kept out of the main package.json so production npm
+    # install stays lean. PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD prevents the
+    # postinstall from pulling a glibc-only chromium that wouldn't run anyway.
+    su -s /bin/sh -c "cd '$APP_DIR/scripts/verify' && PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install --no-audit --no-fund" "$APP_USER"
+
+    echo "==> running offline-sync verifier against an isolated server (port 3099)"
+    # The verifier spins up its own Node server on a throwaway port + tempfile
+    # DB; the live service on $PORT is untouched. If it fails, restore the
+    # prior dist/ so the served frontend reverts, then exit before service
+    # restart so the old code stays loaded.
+    if ! su -s /bin/sh -c "cd '$APP_DIR' && CHROMIUM_PATH=/usr/bin/chromium-headless-shell node scripts/verify/offline-sync.mjs" "$APP_USER"; then
+        echo "    verifier FAILED"
+        if [ -d "$APP_DIR/dist.prev" ]; then
+            echo "    restoring previous dist/ snapshot"
+            rm -rf "$APP_DIR/dist"
+            mv "$APP_DIR/dist.prev" "$APP_DIR/dist"
+        fi
+        echo "    evidence: $APP_DIR/scripts/verify/tmp/report.json"
+        echo "    re-run with SKIP_VERIFY=1 to bypass (e.g. during a hotfix where the verifier itself is broken)."
+        exit 1
+    fi
+
+    rm -rf "$APP_DIR/dist.prev"
+fi
 
 echo "==> writing /etc/init.d/$SERVICE_NAME"
 cat > "/etc/init.d/$SERVICE_NAME" <<EOF
