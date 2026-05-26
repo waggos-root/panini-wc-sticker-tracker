@@ -1,0 +1,9 @@
+{
+  "name": "panini-verify",
+  "private": true,
+  "type": "module",
+  "description": "Verification-only deps, kept out of the main package.json so production npm install stays lean.",
+  "dependencies": {
+    "playwright-core": "^1.48.0"
+  }
+}
