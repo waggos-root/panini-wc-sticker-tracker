@@ -9,6 +9,7 @@ import {
   updateStickerQuantity,
 } from './api.js';
 import * as idb from './idb.js';
+import { applyPendingOverlay } from './overlay.js';
 import { teamGradient } from './teamColors.js';
 import { TEAM_INFO } from './teamFlags.js';
 
@@ -464,22 +465,12 @@ export default function App() {
         // before the sync drain runs.
         const queued = await idb.getAllPending();
         if (cancelled) return;
-        const overlay = new Map();
-        for (const mutation of queued) {
-          if (mutation.profileId === activeProfileId) overlay.set(mutation.code, mutation.quantity);
-        }
-        const merged = overlay.size
-          ? rows.map((sticker) =>
-              overlay.has(sticker.code)
-                ? { ...sticker, quantity: overlay.get(sticker.code), updated_at: new Date().toISOString() }
-                : sticker
-            )
-          : rows;
+        const { stickers: merged, overlayCount } = applyPendingOverlay(rows, queued, activeProfileId);
         setStickers(merged);
         await idb.setCachedStickers(activeProfileId, merged);
         setSyncStatus(
-          overlay.size
-            ? `${overlay.size} cambio(s) pendiente(s) por sincronizar`
+          overlayCount
+            ? `${overlayCount} cambio(s) pendiente(s) por sincronizar`
             : 'Sincronizado con SQLite'
         );
       } catch (_error) {
@@ -488,21 +479,11 @@ export default function App() {
         if (cached && cached.length > 0) {
           const queued = await idb.getAllPending();
           if (cancelled) return;
-          const overlay = new Map();
-          for (const mutation of queued) {
-            if (mutation.profileId === activeProfileId) overlay.set(mutation.code, mutation.quantity);
-          }
-          const merged = overlay.size
-            ? cached.map((sticker) =>
-                overlay.has(sticker.code)
-                  ? { ...sticker, quantity: overlay.get(sticker.code), updated_at: new Date().toISOString() }
-                  : sticker
-              )
-            : cached;
+          const { stickers: merged, overlayCount } = applyPendingOverlay(cached, queued, activeProfileId);
           setStickers(merged);
           setSyncStatus(
-            overlay.size
-              ? `Sin conexión: ${overlay.size} cambio(s) pendiente(s) aplicados sobre caché`
+            overlayCount
+              ? `Sin conexión: ${overlayCount} cambio(s) pendiente(s) aplicados sobre caché`
               : 'Sin conexión: cromos desde caché'
           );
         } else {
